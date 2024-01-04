@@ -9,14 +9,6 @@ from pygame import mixer
 import pygame
 import re
 
-# Opening JSON file
-f = open('SECRETS.json')
-
-# returns JSON object as
-# a dictionary
-loaded_file = json.load(f)
-org_id = loaded_file["orgID"]
-
 GPT_PROMPT = [
     "You are a valorant coach streamer's AI assistant.",
     "Your name is Hook.",
@@ -35,7 +27,7 @@ GPT_PROMPT = [
     "Respond as if you are talking to an audience, not one person."
 ]
 
-MESSAGES_PER_PROMPT = 10
+MESSAGES_PER_PROMPT = 1
 
 EVENT_STREAM_URL = "https://overlay.woohooj.in/stream/?channel=events"
 
@@ -45,11 +37,9 @@ def open_stream(url, headers):
     return http.request('GET', url, preload_content=False, headers=headers)
 
 def main():
-    client = OpenAI(
-        organization=org_id,
-    )
-    mixer.init()
+    client = OpenAI()
 
+    mixer.init()
     pygame.init()
 
     display_width = 800
@@ -58,42 +48,33 @@ def main():
     game_display = pygame.display.set_mode((display_width, display_height))
     pygame.display.set_caption('Hook')
 
-    pink = (255, 0, 255)
-
     talking_img = pygame.image.load('Talking.png')
     waiting_img = pygame.image.load('Waiting.png')
 
-    game_display.fill(pink)
-    game_display.blit(waiting_img, (0, 0))
-    pygame.display.update()
-
+    draw_image(game_display, waiting_img, 0, 0)
+    pygame.event.pump()
 
     messages = sseclient.SSEClient(EVENT_STREAM_URL)
+
     message_count = 0
     chat_messages = []
     for msg in messages:
         pygame.event.pump()
-
         if msg.event == "chat-message":
             try:
                 data = json.loads(msg.data)
-                name = data["displayName"]
                 message = data["content"]
                 # check if message has the token "hook", ignore case
                 # ignore words that contain the sub-word "hook"
                 # Regex removes all punctuation
                 if "hook" in re.sub(r'[^\w\s]', '', message.lower()).split() and len(message.lower()) < 100:
                     message_count += 1
-                    print(message_count)
                     chat_messages.append(message)
             except:
                 pass
 
         if message_count >= MESSAGES_PER_PROMPT:
-            print("SENDING MESSAGE")
-
             random_winner = random.choice(chat_messages)
-            print(random_winner)
             messages = [{"role": "system", "content": message} for message in GPT_PROMPT]
             messages.append({"role": "user", "content": random_winner})
             response = client.chat.completions.create(
@@ -103,7 +84,6 @@ def main():
             )
 
             hook_response = response.choices[0].message.content
-            print(hook_response)
 
             speech_file_path = Path(__file__).parent / "speech.mp3"
             response = client.audio.speech.create(
@@ -119,25 +99,23 @@ def main():
             mixer.music.load(speech_file_path)
             mixer.music.play()
 
-            game_display.fill(pink)
-            game_display.blit(talking_img, (0, 0))
-            pygame.display.update()
             while mixer.music.get_busy():  # wait for music to finish playing
                 pygame.event.pump()
-                game_display.fill(pink)
-                game_display.blit(talking_img, (random.randint(0, 10), random.randint(0, 10)))
-                pygame.display.update()
+                draw_image(game_display, talking_img, random.randint(0, 10), random.randint(0, 10))
                 time.sleep(0.06)
 
-            game_display.fill(pink)
-            game_display.blit(waiting_img, (0, 0))
-            pygame.display.update()
+            draw_image(game_display, waiting_img, 0, 0)
 
             mixer.music.unload()
 
             message_count = 0
-            bulk_message = ""
+            chat_messages = []
 
+def draw_image(game_display, image, x, y):
+    pink = (255, 0, 255)
+    game_display.fill(pink)
+    game_display.blit(image, (x, y))
+    pygame.display.update()
 
 
 
